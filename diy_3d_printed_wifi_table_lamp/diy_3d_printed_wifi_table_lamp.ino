@@ -1,3 +1,15 @@
+/*
+ * DIY 3D printed WiFi table lamp
+ * 
+ * Created by: Alex Risteski - Svarc
+ * Created for: SelfTaughtStuff
+ * Channel URL: https://www.youtube.com/@self_taught_stuff
+ * 
+ * Install "ESP8266 Community" boards definitions
+ * More info on how to install them here: https://github.com/esp8266/Arduino 
+ *  
+*/
+
 #include <ESP8266WiFi.h>
 #include <WiFiClient.h>
 #include <ESP8266WebServer.h>
@@ -35,10 +47,12 @@ unsigned long wifi_connection_start = 0;
 
 ESP8266WebServer server(80);
 
+// Homepage HTML/CSS/JS (WiFi configuration page)
 const char homepage[]PROGMEM=R"=====(
 <!DOCTYPE html><html><head> <title>STS RGB Table Lamp</title> <meta name="viewport" content="width=device-width, initial-scale=1"> <style type="text/css"> body{margin: 0; padding: 0; width: 100%%; height: 100%%; background:linear-gradient(to bottom,#7f8c8d,#95a5a6); background-repeat: no-repeat; background-attachment: fixed;}.main{display: block; position:absolute; height:auto; bottom:0; top:0; left:0; right:0; margin: 20px; background-color: green; padding: 20px; background:#2c3e50; border-radius:10px; box-shadow:5px 20px 50px #000; text-align: center;}.title{font-size:5vw; color: #fff;}.form_wrap{padding: 0; margin: 0; width: 100%%; display: block;}small{font-size:3vw; color: #fff;}.input_wrap{padding: 10px; position: relative;}input{font-size: 5vw; text-align: center; width: 100%%; border-radius: 10px; background-color: #34495e; border: none; box-shadow:2px 5px 5px #233140; color: #95a5a6; padding: 5px;}button{background: #27ae60; font-size: 1em; border: none; border-radius: 5px; transition: 0.2s ease-in; width: 100%%; height: 100%%; min-height: 50px; font-size: 3vw; box-shadow:2px 5px 5px #233140;}button:hover{background:#2ecc71;}.input_wrap i{position: absolute; right: 10px; font-size: 5vw; cursor: pointer; color: #95a5a6; z-index: 9999; display: flex; align-items: center; height: 100%%; top: 0;}</style> <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.13.0/css/all.min.css"></head><body> <div class="main"> <div class="form_wrap"> <label class="title" aria-hidden="true">STS RGB Table Lamp</label> <hr> <form id="form" action="/config" method="GET"> <p><small>Enter your router SSID and Password.</small></p><div class="input_wrap"> <input type="text" name="ssid" placeholder="SSID" required=""> </div><div class="input_wrap"> <input id="id_password" type="password" name="password" placeholder="Password" required=""> <i class="far fa-eye" id="togglePassword"></i> </div><div class="input_wrap"> <button type="submit" form="form" value="Submit">Connect</button> </div></form> </div></div></body><script type="text/javascript">(function(){const togglePassword=document.querySelector('#togglePassword'); const password=document.querySelector('#id_password'); togglePassword.addEventListener('click', function (e){const type=password.getAttribute('type')==='password' ? 'text' : 'password'; password.setAttribute('type', type); this.classList.toggle('fa-eye-slash');});})();</script></html>
 )=====";
 
+// Wifi connection page
 const char connection_page[]PROGMEM=R"=====(
 <!DOCTYPE html><html><head> <title>STS RGB Table Lamp</title> <meta name="viewport" content="width=device-width, initial-scale=1"> <style type="text/css"> body{margin: 0; padding: 0; width: 100%%; height: 100%%; background:linear-gradient(to bottom,#7f8c8d,#95a5a6); background-repeat: no-repeat; background-attachment: fixed;}.main{display: block; position:absolute; height:auto; bottom:0; top:0; left:0; right:0; margin: 20px; background-color: green; padding: 20px; background:#2c3e50; border-radius:10px; box-shadow:5px 20px 50px #000; text-align: center;}.title{font-size:5vw; color: #fff;}.form_wrap{padding: 0; margin: 0; width: 100%%; display: block;}small{font-size:3vw; color: #fff;}</style></head><body> <div class="main"> <label class="title" aria-hidden="true">STS RGB Table Lamp</label> <hr> <div class="form_wrap"> <small> <p>Device is trying to connect...</p><p>Wait for 10 seconds, then check the blue status LED.</p><p>If the LED is constantly on, open your router and find the ip of the device named STS_RGB_Table_Lamp, then add `/control` after the ip and open that URL in your browser</p><p>If the LED is blinking, connection failed, try setting the SSID and password of your WiFi again.</p></small> </div></div></body></html>
 )=====";
@@ -62,6 +76,9 @@ void loop() {
   change_led_status();  
 }
 
+// Checks if the device is connected to the router
+// If not connected fade the led in and out, start AP for client to connect and config the WiFi credentials
+// If connected wait for client request
 void check_connection(){
   if(WiFi.status() != WL_CONNECTED) {    
     fade_led_not_connected();
@@ -72,6 +89,9 @@ void check_connection(){
   }  
 }
 
+// Handle the request
+// If control is enable (false on start) handle the client by serving the requested route
+// If control not enabled register route "/control" and enable the control 
 void handle_control(){
   if(control_enabled){
     server.handleClient();
@@ -81,6 +101,9 @@ void handle_control(){
   }
 }
 
+// Check for control
+// If auto cycle selected set the values of the lights to 0 and start cycling
+// Otherwise set the values of the lights to the GET parameters and serve the control page
 void provideControl(){
   if(server.arg("auto_cycle").toInt() == 1){
     red = 0;
@@ -102,6 +125,7 @@ void provideControl(){
   }  
   StreamString controlpage;
   controlpage.reserve(10000);
+  // Control page start
   controlpage.printf("\
 <!DOCTYPE html>\
 <html>\
@@ -304,82 +328,13 @@ void provideControl(){
   }\
 </script>\
 </html>", intensity, intensity, intensity, server.arg("redrange").toInt(), server.arg("greenrange").toInt(), server.arg("bluerange").toInt());
+  // Control page end
   server.send(200, "text/html", controlpage.c_str());
-  delay(300);    
-//  \
-//<!DOCTYPE html>\
-//<html>\
-//<head>\
-//  <title>STS RGB Table Lamp</title>\
-//  <meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">\
-//  <style type=\"text/css\">\
-//body{margin: 0; padding: 0; width: 100%%; height: 100%%; background:linear-gradient(to bottom,#7f8c8d,#95a5a6); background-repeat: no-repeat; background-attachment: fixed;}.main{display: block; position:absolute; height:auto; bottom:0; top:0; left:0; right:0; margin: 20px; background-color: green; padding: 20px; background:#2c3e50; border-radius:10px; box-shadow:5px 20px 50px #000; text-align: center;}.title{font-size:5vw; color: #fff;}.form_wrap{padding: 0; margin: 0; width: 100%%; display: block;}.colorcyclewrapper{min-width: 100%%; min-height: 50px; margin-bottom: 10px;}.colorcyclewrapper button{background: #27ae60; font-size: 1em; border: none; border-radius: 5px; transition: 0.2s ease-in; width: 100%%; height: 100%%; min-height: 50px;}.colorcyclewrapper button:hover{background:#2ecc71;}\
-//  </style>\
-//</head>\
-//<body>\
-//  <div class=\"main\">\
-//    <label class=\"title\" aria-hidden=\"true\">STS RGB Table Lamp</label>\
-//    <hr>\
-//    <div class=\"colorcyclewrapper\">\
-//      <a href=\"/control?auto_cycle=1\"><button>Auto Cycle</button></a>\
-//    </div>\
-//    <div class=\"form_wrap\">\
-//    </div>\
-//  </div>\
-//</body>\
-//<script type=\"text/javascript\">\
-//  (function() {\
-//    let main = document.querySelector('.main');\
-//    let form_wrap = document.querySelector('.form_wrap');\
-//    let wrap_width = form_wrap.getBoundingClientRect().width;\
-//    let main_height = main.getBoundingClientRect().height;\
-//    let box_width = Math.round(wrap_width/9);\
-//    let title = document.querySelector('.title');\
-//    let title_height = title.offsetHeight;\
-//    let hr = document.querySelector('hr');\
-//    let hr_height = hr.getBoundingClientRect().height;\
-//    let cycle = document.querySelector('.colorcyclewrapper');\
-//    let cycle_height = cycle.getBoundingClientRect().height;\
-//    let wrapper_height = Math.floor(main_height - title_height - hr_height - cycle_height - 10);\
-//    let box_height = Math.floor(wrapper_height/10);\
-//    var i = 0;\
-//    var r = 255;\
-//    var g = 0;\
-//    var b = 0;\
-//    var colors = [];\
-//    for (g = 0; g < 255; g += 17) {\
-//      colors.push([r, g, b]);\
-//      i++;\
-//    }\
-//    for (r = 255; r > 0; r -= 17) {\
-//      colors.push([r, g, b]);\
-//      i++;\
-//    }\
-//    for (b = 0; b < 255; b += 17) {\
-//      colors.push([r, g, b]);\
-//      i++;\
-//    }\
-//    for (g = 255; g > 0; g -= 17) {\
-//      colors.push([r, g, b]);\
-//      i++;\
-//    }\
-//    for (r = 0; r < 255; r += 17) {\
-//      colors.push([r, g, b]);\
-//      i++;\
-//    }\
-//    for (b = 255; b > 0; b -= 17) {\
-//      colors.push([r, g, b]);\
-//      i++;\
-//    }\
-//    colors.forEach(make_color_box);\
-//    function make_color_box(item, index, arr) {\
-//      form_wrap.innerHTML += '<a href=\"/control?redrange=' + item[0] + '&greenrange=' + item[1] + '&bluerange=' + item[2] + '\" style=\"display:inline-block;height:' + (box_height - 10) + 'px;width:11%%;background-color: rgb(' + item[0] + ',' + item[1] + ',' + item[2] + ');box-sizing: border-box;-moz-box-sizing: border-box;-webkit-box-sizing: border-box;border:1px solid #2c3e50\"><div class=\"colors\" style=\"display:inline-block;width:11%%;\"></div></a>';\
-//    }\
-//  })();\
-//</script>\
-//</html>
+  delay(300);
 }
 
+// If config is enabled then handle the client request and serve the route requested
+// If config not enabled start AP and declare the routes for configuring WiFi credentials
 void handle_wifi_config(){
   if(config_enabled){
     server.handleClient();
@@ -395,11 +350,13 @@ void handle_wifi_config(){
   }    
 }
 
+// Serves the config page
 void displayConfig() {
   server.send(200, "text/html", homepage);
   delay(300);
 }
 
+// Handles the WiFi credentials configuration, calls the connection function and serves the connection page
 void saveConfig(){
   String message = "";
   if (server.arg("ssid") == "" || server.arg("password") == ""){
@@ -416,6 +373,7 @@ void saveConfig(){
   make_connection(server.arg("ssid"), server.arg("password"));
 }
 
+// Makes the WiFi connection and restarts the device to save the credentials to the ESP8266 chip
 void make_connection(String ssid, String password){
   WiFi.disconnect();  
   #ifdef WIFI_IS_OFF_AT_BOOT
@@ -436,6 +394,7 @@ void make_connection(String ssid, String password){
   Serial.println("connection successful");
 }
 
+// Checks if the restart button is pressed
 void check_restart(){
   if( digitalRead(TRIGGER_PIN) == LOW ){
     delay(100);        
@@ -443,6 +402,7 @@ void check_restart(){
   }
 }
 
+// Flushes the saved WiFi credentials from the ESP8266 chip and restarts the device
 void flush_config(){
     WiFi.disconnect();
     WiFi.persistent(false);
@@ -450,6 +410,7 @@ void flush_config(){
     ESP.restart();  
 }
 
+// Fade the led in and out when not connected to the WiFi
 void fade_led_not_connected(){
   if(millis() >= previous_time + pwm_delay){
     previous_time = millis();
@@ -472,6 +433,9 @@ void fade_led_not_connected(){
   analogWrite(LED_BUILTIN, brightness);  
 }
 
+// Checks the light mode
+// If cycle selected then call the function to cycle the colors
+// Otherwise set the lights to the new values
 void change_led_status(){
   if(cycle){
     cycle_colors();
@@ -482,6 +446,7 @@ void change_led_status(){
   }
 }
 
+// Function to randomly cycle the color of the light
 void cycle_colors(){
   if(millis() >= led_previous_time + led_pwm_delay){
     led_previous_time = millis();
